@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: build-and-test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Análisis estático (ESLint)
+        run: npm run lint
+
+      - name: Pruebas unitarias
+        run: npm run test:unit
+
+      - name: Pruebas de integración
+        run: npm run test:integration
+
+      - name: Reporte de cobertura
+        shell: bash
+        run: npm run test:coverage | tee coverage-output.txt
+
+      - name: Publicar resumen de cobertura
+        if: always()
+        shell: bash
+        run: |
+          echo "## Cobertura (Node ${{ matrix.node-version }})" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat coverage-output.txt >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Subir reporte de cobertura como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-node-${{ matrix.node-version }}
+          path: coverage/
