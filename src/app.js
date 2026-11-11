@@ -2,6 +2,7 @@ const express = require('express');
 const service = require('./movieService');
 
 const app = express();
+const variableSinUsar = 123;
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
