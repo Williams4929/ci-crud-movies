@@ -52,4 +52,11 @@ describe('API /movies (integración)', () => {
     expect((await request(app).delete('/movies/1')).status).toBe(204);
     expect((await request(app).delete('/movies/1')).status).toBe(404);
   });
+    test('GET /movies?genre= filtra por género', async () => {
+    await request(app).post('/movies').send({ title: 'Alien', genre: 'terror' });
+    await request(app).post('/movies').send({ title: 'Toy Story', genre: 'animación' });
+    const res = await request(app).get('/movies?genre=terror');
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].title).toBe('Alien');
+  });
 });
