@@ -6,7 +6,11 @@ app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-app.get('/movies', (req, res) => res.json(service.getAll()));
+app.get('/movies', (req, res) => {
+  const { genre } = req.query;
+  const movies = service.getAll();
+  res.json(genre ? movies.filter((m) => m.genre === genre) : movies);
+});
 
 app.get('/movies/:id', (req, res) => {
   const movie = service.getById(Number(req.params.id));
