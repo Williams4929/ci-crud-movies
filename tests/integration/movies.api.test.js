@@ -13,7 +13,7 @@ describe('API /movies (integración)', () => {
 
   test('POST /movies crea una película', async () => {
     const res = await request(app).post('/movies').send({ title: 'Matrix', year: 1999 });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(20);
     expect(res.body).toMatchObject({ id: 1, title: 'Matrix', year: 1999 });
   });
 
