@@ -38,5 +38,7 @@ app.delete('/movies/:id', (req, res) => {
   }
   res.status(204).send();
 });
-
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', version: '1.0.0' });
+});
 module.exports = app;
