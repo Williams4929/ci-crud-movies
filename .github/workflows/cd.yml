@@ -1,0 +1,123 @@
+name: CD - Build, Scan y Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  IMAGE: ${{ vars.IMAGE_NAME }}
+
+jobs:
+  # 1) Construye la imagen y la sube a Docker Hub
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codigo
+        uses: actions/checkout@v6
+
+      - name: Login a Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build y Push (tags SHA + latest)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+
+  # 2) Escaneo de vulnerabilidades (job sin secretos)
+  scan:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Escaneo con Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ github.sha }}
+          format: table
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+
+  # 3) Despliegue en staging
+  deploy-staging:
+    needs: [build-and-push, scan]
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: http://${{ vars.PUBLIC_HOST }}/health
+    steps:
+      - name: Desplegar en staging
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            IMAGE="${{ env.IMAGE }}:${{ github.sha }}"
+            mkdir -p ~/mi-app && touch ~/mi-app/.env
+
+            docker pull "$IMAGE"
+            docker rm -f mi-app-new 2>/dev/null || true
+            docker run -d --name mi-app-new --env-file ~/mi-app/.env -p 3001:3000 "$IMAGE"
+            sleep 8
+
+            if curl -sf http://localhost:3001/health; then
+              echo "Health check OK. Activando nueva version..."
+              docker rm -f mi-app-new
+              docker rm -f mi-app 2>/dev/null || true
+              docker run -d --name mi-app --restart unless-stopped \
+                --env-file ~/mi-app/.env -p 80:3000 "$IMAGE"
+            else
+              echo "Health check FALLIDO. Se mantiene la version anterior."
+              docker logs mi-app-new || true
+              docker rm -f mi-app-new || true
+              exit 1
+            fi
+            docker image prune -f
+
+  # 4) Despliegue en production (requiere aprobacion)
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: http://${{ vars.PUBLIC_HOST }}/health
+    steps:
+      - name: Desplegar en produccion
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            IMAGE="${{ env.IMAGE }}:${{ github.sha }}"
+            mkdir -p ~/mi-app && touch ~/mi-app/.env
+
+            docker pull "$IMAGE"
+            docker rm -f mi-app-new 2>/dev/null || true
+            docker run -d --name mi-app-new --env-file ~/mi-app/.env -p 3001:3000 "$IMAGE"
+            sleep 8
+
+            if curl -sf http://localhost:3001/health; then
+              echo "Health check OK. Activando nueva version..."
+              docker rm -f mi-app-new
+              docker rm -f mi-app 2>/dev/null || true
+              docker run -d --name mi-app --restart unless-stopped \
+                --env-file ~/mi-app/.env -p 80:3000 "$IMAGE"
+            else
+              echo "Health check FALLIDO. Se mantiene la version anterior."
+              docker logs mi-app-new || true
+              docker rm -f mi-app-new || true
+              exit 1
+            fi
+            docker image prune -f
