@@ -4,7 +4,7 @@ const service = require('./movieService');
 const app = express();
 app.use(express.json());
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok', version: '1.0.0' }));
 
 app.get('/movies', (req, res) => {
   const { genre } = req.query;
@@ -38,7 +38,5 @@ app.delete('/movies/:id', (req, res) => {
   }
   res.status(204).send();
 });
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'ok', version: '1.0.0' });
-});
+
 module.exports = app;
